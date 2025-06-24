@@ -4,12 +4,35 @@
 #include <time.h>           // For NTP functions (time.h standard C library)
 #include "Arduino.h"
 
-// Functions prototypes
+// FreeRTOS includes for tasks
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
+
+// Enum for LED modes controlled by the task
+enum LedMode {
+  LED_MODE_OFF,
+  LED_MODE_ON,
+  LED_MODE_BLINK_SLOW, // E.g., 1000ms on, 1000ms off
+  LED_MODE_BLINK_FAST  // E.g., 200ms on, 200ms off
+};
+
+// Global variable to share LED mode with the FreeRTOS task
+// 'volatile' is crucial as it's modified by one context (loop) and read by another (task)
+volatile LedMode mainLedMode;
+volatile LedMode redLedMode;
+volatile LedMode greenLedMode;
+volatile LedMode bluLedMode;
+
+// Functions prototypes
+// Function to control the built-in LED directly (non-blocking if not delaying)
+void setBoardLEDState(bool state);
+// FreeRTOS Task for LED control
+void ledControlTask(void *pvParameters);
 void goIntoSpleep();
 void activateRelay();
 void print_wakeup_reason();
-void syncTimeWithNTP();
+bool syncTimeWithNTP();
 void setWebServer(void *parameter);
 
 const int RELAY_PIN  = 8;
@@ -48,18 +71,63 @@ RTC_DATA_ATTR int bootCount = 0; // To track how many times the ESP32 has woken 
 RTC_DATA_ATTR bool morningActivation = false;
 RTC_DATA_ATTR bool eveningActivation = false;
 
-// Set web server port number to 80
-WiFiServer server(80);
-// Variable to store the HTTP request
-String header;
-// TaskHandle_t Task1;
-
-
 void setup() {
 
   Serial.begin(9600);
   delay(100); //wait for Serial to initialize
   Serial.println("--- Setup Start ---");
+
+  // put your setup code here, to run once:
+  pinMode(LED_RED, OUTPUT);
+  pinMode(LED_GREEN, OUTPUT);
+  pinMode(LED_BLUE, OUTPUT);
+  pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(RELAY_PIN, OUTPUT); // Set pin 8 (D8) as an output
+  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
+
+  // --- Create the LED control FreeRTOS task ---
+  xTaskCreatePinnedToCore(
+    ledControlTask,   // Task function
+    "MainLED Control",    // Name of task
+    2048,             // Stack size (bytes) - adjust if needed
+    NULL,             // Parameter to pass to the task
+    1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
+    NULL,             // Task handle (not used here)
+    0                 // Core to run on (Core 0 for background tasks)
+  );
+  xTaskCreatePinnedToCore(
+    ledControlTask,   // Task function
+    "RedLED Control",    // Name of task
+    2048,             // Stack size (bytes) - adjust if needed
+    NULL,             // Parameter to pass to the task
+    1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
+    NULL,             // Task handle (not used here)
+    0                 // Core to run on (Core 0 for background tasks)
+  );
+  xTaskCreatePinnedToCore(
+    ledControlTask,   // Task function
+    "GreenLED Control",    // Name of task
+    2048,             // Stack size (bytes) - adjust if needed
+    NULL,             // Parameter to pass to the task
+    1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
+    NULL,             // Task handle (not used here)
+    0                 // Core to run on (Core 0 for background tasks)
+  );
+  xTaskCreatePinnedToCore(
+    ledControlTask,   // Task function
+    "BlueLED Control",    // Name of task
+    2048,             // Stack size (bytes) - adjust if needed
+    NULL,             // Parameter to pass to the task
+    1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
+    NULL,             // Task handle (not used here)
+    0                 // Core to run on (Core 0 for background tasks)
+  );
+  Serial.println("LED Control Task created on Core 0.");
+
+  mainLedMode = LED_MODE_OFF;
+  redLedMode = LED_MODE_ON;
+  greenLedMode = LED_MODE_OFF;
+  bluLedMode = LED_MODE_OFF;
 
   // Increment boot count every time the ESP32 starts (after reset or deep sleep wake)
   bootCount++;
@@ -77,20 +145,6 @@ void setup() {
   // Print wake up reason for debugging
   print_wakeup_reason();
 
-  pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(RELAY_PIN, OUTPUT); // Set pin 8 (D8) as an output
-  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
-
-  // start webservice
-  // xTaskCreatePinnedToCore(
-  //     setWebServer, /* Function to implement the task */
-  //     "webservice", /* Name of the task */
-  //     10000,  /* Stack size in words */
-  //     NULL,  /* Task input parameter */
-  //     0,  /* Priority of the task */
-  //     &Task1,  /* Task handle. */
-  //     0); /* Core where the task should run */
-
   // activation bool reset
   eveningActivation = false;
   morningActivation = false;
@@ -100,12 +154,15 @@ void setup() {
   // This means pressing the button will wake the ESP32.
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0);
   Serial.println("Button wakeup enabled on GPIO0 (BOOT button).");
+  redLedMode = LED_MODE_OFF;
   Serial.println("--- Setup End ---");
 }
 
 void loop() {
   Serial.println("--- Loop Start ---");
-  digitalWrite(LED_BUILTIN, HIGH); // Indicate board is awake
+  
+  mainLedMode = LED_MODE_ON; // Keep LED on while main loop is active
+  greenLedMode = LED_MODE_BLINK_SLOW;
 
   // Get current time
   int currentHour = rtc.getHour();
@@ -140,11 +197,12 @@ void loop() {
     Serial.println("Resetting activation flags after evening window.");
     delay(1000); // Wait for 1 second before going to sleep
   }else{
+    Serial.println("Waiting a minute since not in sctivation time");
     // wait for a minute to keep board on for some times
     delay(1 * 60 * 1000);
     for (int i = 0; i < 6; i++)
     {
-      syncTimeWithNTP();
+      if(syncTimeWithNTP()){break;}
       delay(50);
     }
     Serial.println("All attempts to update time done");
@@ -152,8 +210,7 @@ void loop() {
 
   Serial.println("--- Loop End ---");
   
-  // vTaskDelete(Task1); // Delete the web server task to free resources
-
+  greenLedMode = LED_MODE_OFF;
   goIntoSpleep();
 }
 
@@ -169,20 +226,16 @@ void goIntoSpleep()
 }
 
 void activateRelay()
-{
+{ 
+  bluLedMode = LED_MODE_BLINK_FAST;
   Serial.println("Activating relay for " + String(ACTIVATION_MINUTES) + " minutes.");
   digitalWrite(RELAY_PIN, HIGH); // Activate the relay
 
-  bool ledON = true;
   delay(ACTIVATION_MINUTES * 60 * 1000); // Stay awake for ACTIVATION_MINUTES minutes
-  for (int i = 0; i < 60 * ACTIVATION_MINUTES; i++)
-  {
-    digitalWrite(RELAY_PIN, ledON ? LOW : HIGH);
-    ledON = !ledON;
-    delay(999); // Stay awake for ACTIVATION_MINUTES minutes
-  }
+  
   digitalWrite(RELAY_PIN, LOW); // Deactivate the relay
   Serial.println("Relay deactivated after " + String(ACTIVATION_MINUTES) + " minutes.");
+  bluLedMode = LED_MODE_OFF;
 }
 
 /*
@@ -205,10 +258,11 @@ void print_wakeup_reason(){
   }
 }
 
-
 // Function to connect to WiFi and synchronize time via NTP
-void syncTimeWithNTP() {
+bool syncTimeWithNTP() {
+  bool retValue = false;
   Serial.println("\nConnecting to WiFi for time sync...");
+  redLedMode = LED_MODE_BLINK_FAST;
   WiFi.mode(WIFI_STA); // Set WiFi to Station mode
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -247,6 +301,7 @@ void syncTimeWithNTP() {
       rtc.setTime(current_epoch_seconds); // Update ESP32Time RTC
       Serial.print("RTC time updated: ");
       Serial.println(rtc.getDateTime());
+      retValue = true;
     } else {
       Serial.println("NTP time synchronization failed or timed out.");
     }
@@ -256,73 +311,55 @@ void syncTimeWithNTP() {
     Serial.println("Failed to connect to WiFi hotspot.");
   }
   WiFi.mode(WIFI_OFF); // Turn off WiFi radio completely
+  redLedMode = LED_MODE_OFF;
+  return retValue;
 }
 
-void setWebServer(void *parameter)
-{
-  WiFiClient client = server.available();   // Listen for incoming clients
+// Function to control the built-in LED directly (non-blocking if not delaying)
+void setBoardLEDState(bool state) {
+  digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
+}
 
-  long timeoutTime = 30000;
-  if (client) {                             // If a new client connects,
-    long currentTime = millis();
-    long previousTime = currentTime;
-    Serial.println("New Client.");          // print a message out in the serial port
-    String currentLine = "";                // make a String to hold incoming data from the client
-    while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
-      currentTime = millis();
-      if (client.available()) {             // if there's bytes to read from the client,
-        char c = client.read();             // read a byte, then
-        Serial.write(c);                    // print it out the serial monitor
-        header += c;
-        if (c == '\n') {                    // if the byte is a newline character
-          // if the current line is blank, you got two newline characters in a row.
-          // that's the end of the client HTTP request, so send a response:
-          if (currentLine.length() == 0) {
-            // HTTP headers always start with a response code (e.g. HTTP/1.1 200 OK)
-            // and a content-type so the client knows what's coming, then a blank line:
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-type:text/html");
-            client.println("Connection: close");
-            client.println();
-                        
-            // Display the HTML web page
-            client.println("<!DOCTYPE html><html>");
-            client.println("<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-            client.println("<link rel=\"icon\" href=\"data:,\">");
-            // CSS to style the on/off buttons 
-            // Feel free to change the background-color and font-size attributes to fit your preferences
-            client.println("<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}");
-            client.println(".button { background-color: #4CAF50; border: none; color: white; padding: 16px 40px;");
-            client.println("text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer;}");
-            client.println(".button2 {background-color: #555555;}</style></head>");
-            
-            // Web Page Heading
-            client.println("<body><h1>Orto Ariazzi - Dotti Web Server</h1>");
-            
-            // Display current state, and ON/OFF buttons for GPIO 26  
-            client.println("<p>La Scheda si è attivata " + String(bootCount) + " volte</p>");
-            client.println("<p>L'irrigazione della mattina è stata fatta: " + String(morningActivation?"si":"no") + "</p>");
-            client.println("<p>L'irrigazione della sera è stata fatta: " + String(eveningActivation?"si":"no") + "</p>");
-            
-            client.println("</body></html>");
-            
-            // The HTTP response ends with another blank line
-            client.println();
-            // Break out of the while loop
-            break;
-          } else { // if you got a newline, then clear currentLine
-            currentLine = "";
-          }
-        } else if (c != '\r') {  // if you got anything else but a carriage return character,
-          currentLine += c;      // add it to the end of the currentLine
+// FreeRTOS Task for LED control
+void ledControlTask(void *pvParameters) {
+  (void) pvParameters; // Cast to void to suppress unused parameter warning
+
+  bool ledState = LOW;
+  int blinkDelayMs = 0;
+
+  for (;;) { // Infinite loop for the task
+    switch (mainLedMode) {
+      case LED_MODE_OFF:
+        if (ledState == HIGH) { // Only change if necessary
+          setBoardLEDState(false);
+          ledState = LOW;
         }
-      }
+        vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
+        break;
+
+      case LED_MODE_ON:
+        if (ledState == LOW) { // Only change if necessary
+          setBoardLEDState(true);
+          ledState = HIGH;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
+        break;
+
+      case LED_MODE_BLINK_SLOW:
+        blinkDelayMs = 1000;
+        setBoardLEDState(!ledState); // Toggle LED state
+        ledState = !ledState;
+        vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
+        break;
+
+      case LED_MODE_BLINK_FAST:
+        blinkDelayMs = 200;
+        setBoardLEDState(!ledState); // Toggle LED state
+        ledState = !ledState;
+        vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
+        break;
     }
-    // Clear the header variable
-    header = "";
-    // Close the connection
-    client.stop();
-    Serial.println("Client disconnected.");
-    Serial.println("");
   }
 }
+
+// --- End LED Control Functions & Task ---
