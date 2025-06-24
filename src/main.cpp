@@ -10,7 +10,7 @@ void goIntoSpleep();
 void activateRelay();
 void print_wakeup_reason();
 void syncTimeWithNTP();
-void setWebServer();
+void setWebServer(void *parameter);
 
 const int RELAY_PIN  = 8;
 
@@ -52,6 +52,7 @@ RTC_DATA_ATTR bool eveningActivation = false;
 WiFiServer server(80);
 // Variable to store the HTTP request
 String header;
+// TaskHandle_t Task1;
 
 
 void setup() {
@@ -81,14 +82,14 @@ void setup() {
   digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
 
   // start webservice
-  xTaskCreatePinnedToCore(
-      setWebServer, /* Function to implement the task */
-      "webservice", /* Name of the task */
-      10000,  /* Stack size in words */
-      NULL,  /* Task input parameter */
-      0,  /* Priority of the task */
-      &Task1,  /* Task handle. */
-      0); /* Core where the task should run */
+  // xTaskCreatePinnedToCore(
+  //     setWebServer, /* Function to implement the task */
+  //     "webservice", /* Name of the task */
+  //     10000,  /* Stack size in words */
+  //     NULL,  /* Task input parameter */
+  //     0,  /* Priority of the task */
+  //     &Task1,  /* Task handle. */
+  //     0); /* Core where the task should run */
 
   // activation bool reset
   eveningActivation = false;
@@ -151,7 +152,7 @@ void loop() {
 
   Serial.println("--- Loop End ---");
   
-  vTaskDelete(Task1); // Delete the web server task to free resources
+  // vTaskDelete(Task1); // Delete the web server task to free resources
 
   goIntoSpleep();
 }
@@ -257,12 +258,14 @@ void syncTimeWithNTP() {
   WiFi.mode(WIFI_OFF); // Turn off WiFi radio completely
 }
 
-void setWebServer(){
-WiFiClient client = server.available();   // Listen for incoming clients
+void setWebServer(void *parameter)
+{
+  WiFiClient client = server.available();   // Listen for incoming clients
 
+  long timeoutTime = 30000;
   if (client) {                             // If a new client connects,
-    currentTime = millis();
-    previousTime = currentTime;
+    long currentTime = millis();
+    long previousTime = currentTime;
     Serial.println("New Client.");          // print a message out in the serial port
     String currentLine = "";                // make a String to hold incoming data from the client
     while (client.connected() && currentTime - previousTime <= timeoutTime) {  // loop while the client's connected
@@ -297,9 +300,9 @@ WiFiClient client = server.available();   // Listen for incoming clients
             client.println("<body><h1>Orto Ariazzi - Dotti Web Server</h1>");
             
             // Display current state, and ON/OFF buttons for GPIO 26  
-            client.println("<p>La Scheda si è attivata " + bootCount + " volte</p>");
-            client.println("<p>L'irrigazione della mattina è stata fatta: " + morningActivation?"si":"no" + "</p>");
-            client.println("<p>L'irrigazione della sera è stata fatta: " + eveningActivation?"si":"no" + "</p>");
+            client.println("<p>La Scheda si è attivata " + String(bootCount) + " volte</p>");
+            client.println("<p>L'irrigazione della mattina è stata fatta: " + String(morningActivation?"si":"no") + "</p>");
+            client.println("<p>L'irrigazione della sera è stata fatta: " + String(eveningActivation?"si":"no") + "</p>");
             
             client.println("</body></html>");
             
