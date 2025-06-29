@@ -3,6 +3,7 @@
 #include <WiFi.h>           // For WiFi connection
 #include <time.h>           // For NTP functions (time.h standard C library)
 #include "Arduino.h"
+#include "libs/led.h"
 
 // FreeRTOS includes for tasks
 #include "freertos/FreeRTOS.h"
