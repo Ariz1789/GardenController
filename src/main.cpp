@@ -8,6 +8,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+// my libraries
+#include "led.h"          // For LED control functions  
+#include "boardTime.h"   // For time synchronization functions
+#include "boardSleep.h"  // For sleep and wake functions
+
 
 // Enum for LED modes controlled by the task
 enum LedMode {
@@ -214,17 +219,6 @@ void loop() {
   goIntoSpleep();
 }
 
-void goIntoSpleep()
-{
-  digitalWrite(LED_BUILTIN, LOW);
-
-  long sleepTimeUs = SPLEEP_MINUTES * 60 * 1000000ULL; // Convert seconds to microseconds
-  Serial.println("Start sleeping for " + String(SPLEEP_MINUTES) + " minutes.");
-  esp_sleep_enable_timer_wakeup(sleepTimeUs);
-  Serial.flush(); // Ensure all serial output is sent before sleeping
-  esp_deep_sleep_start();
-}
-
 void activateRelay()
 { 
   bluLedMode = LED_MODE_BLINK_FAST;
@@ -237,129 +231,3 @@ void activateRelay()
   Serial.println("Relay deactivated after " + String(ACTIVATION_MINUTES) + " minutes.");
   bluLedMode = LED_MODE_OFF;
 }
-
-/*
-Method to print the reason by which ESP32
-has been awaken from sleep
-*/
-void print_wakeup_reason(){
-  esp_sleep_wakeup_cause_t wakeup_reason;
-
-  wakeup_reason = esp_sleep_get_wakeup_cause();
-
-  switch(wakeup_reason)
-  {
-    case ESP_SLEEP_WAKEUP_EXT0 : Serial.println("Wakeup caused by external signal using RTC_IO"); break;
-    case ESP_SLEEP_WAKEUP_EXT1 : Serial.println("Wakeup caused by external signal using RTC_CNTL"); break;
-    case ESP_SLEEP_WAKEUP_TIMER : Serial.println("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD : Serial.println("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP : Serial.println("Wakeup caused by ULP program"); break;
-    default : Serial.printf("Wakeup was not caused by deep sleep: %d\n",wakeup_reason); break;
-  }
-}
-
-// Function to connect to WiFi and synchronize time via NTP
-bool syncTimeWithNTP() {
-  bool retValue = false;
-  Serial.println("\nConnecting to WiFi for time sync...");
-  redLedMode = LED_MODE_BLINK_FAST;
-  WiFi.mode(WIFI_STA); // Set WiFi to Station mode
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-
-  int connectionAttempts = 0;
-  // Wait for connection or timeout
-  while (WiFi.status() != WL_CONNECTED && connectionAttempts < 20) { // Try for ~10 seconds (20 * 500ms)
-    delay(500);
-    Serial.print(".");
-    connectionAttempts++;
-  }
-  Serial.println();
-
-  if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("WiFi Connected! IP address: " + WiFi.localIP().toString());
-    
-    // Configure NTP client
-    // Set the timezone string for Italy. This will handle DST automatically.
-    // Europe/Rome is the correct timezone for Italy.
-    configTzTime(TZ_INFO, NTP_SERVER_1, NTP_SERVER_2);
-    // setTZ("CET-1CEST,M3.5.0,M10.5.0/3"); // Old way, less flexible. configTzFile is better.
-
-    Serial.println("Synchronizing time with NTP server...");
-    // Give time for NTP to sync
-    long current_epoch_seconds = time(nullptr); // Get current epoch time (will be 0 if not synced yet)
-    int sync_attempts = 0;
-    while (current_epoch_seconds < 1000000000 && sync_attempts < 10) { // Wait for a valid epoch time (e.g., > 2001)
-      delay(1000); // Wait for 1 second
-      current_epoch_seconds = time(nullptr);
-      Serial.print("*");
-      sync_attempts++;
-    }
-    Serial.println();
-
-    if (current_epoch_seconds > 1000000000) { // Check if time is actually synchronized
-      Serial.println("Time synchronized successfully via NTP!");
-      rtc.setTime(current_epoch_seconds); // Update ESP32Time RTC
-      Serial.print("RTC time updated: ");
-      Serial.println(rtc.getDateTime());
-      retValue = true;
-    } else {
-      Serial.println("NTP time synchronization failed or timed out.");
-    }
-    WiFi.disconnect(true); // Disconnect from WiFi to save power
-    Serial.println("WiFi disconnected.");
-  } else {
-    Serial.println("Failed to connect to WiFi hotspot.");
-  }
-  WiFi.mode(WIFI_OFF); // Turn off WiFi radio completely
-  redLedMode = LED_MODE_OFF;
-  return retValue;
-}
-
-// Function to control the built-in LED directly (non-blocking if not delaying)
-void setBoardLEDState(bool state) {
-  digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
-}
-
-// FreeRTOS Task for LED control
-void ledControlTask(void *pvParameters) {
-  (void) pvParameters; // Cast to void to suppress unused parameter warning
-
-  bool ledState = LOW;
-  int blinkDelayMs = 0;
-
-  for (;;) { // Infinite loop for the task
-    switch (mainLedMode) {
-      case LED_MODE_OFF:
-        if (ledState == HIGH) { // Only change if necessary
-          setBoardLEDState(false);
-          ledState = LOW;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
-        break;
-
-      case LED_MODE_ON:
-        if (ledState == LOW) { // Only change if necessary
-          setBoardLEDState(true);
-          ledState = HIGH;
-        }
-        vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
-        break;
-
-      case LED_MODE_BLINK_SLOW:
-        blinkDelayMs = 1000;
-        setBoardLEDState(!ledState); // Toggle LED state
-        ledState = !ledState;
-        vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
-        break;
-
-      case LED_MODE_BLINK_FAST:
-        blinkDelayMs = 200;
-        setBoardLEDState(!ledState); // Toggle LED state
-        ledState = !ledState;
-        vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
-        break;
-    }
-  }
-}
-
-// --- End LED Control Functions & Task ---
