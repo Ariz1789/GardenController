@@ -3,6 +3,14 @@
 		{
 			"name": "OrtoTest",
 			"path": "."
+		},
+		{
+			"name": "Lora test Casa",
+			"path": "../Lora test Casa"
+		},
+		{
+			"name": "Lora test orto",
+			"path": "../Lora test orto"
 		}
 	],
 	"settings": {}
