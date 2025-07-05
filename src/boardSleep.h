@@ -1,10 +1,10 @@
 
-void goIntoSpleep()
+void goIntoSpleep(long sleepMin)
 {
   digitalWrite(LED_BUILTIN, LOW);
 
-  long sleepTimeUs = SPLEEP_MINUTES * 60 * 1000000ULL; // Convert seconds to microseconds
-  Serial.println("Start sleeping for " + String(SPLEEP_MINUTES) + " minutes.");
+  long sleepTimeUs = sleepMin * 60 * 1000000ULL; // Convert seconds to microseconds
+  Serial.println("Start sleeping for " + String(sleepMin) + " minutes.");
   esp_sleep_enable_timer_wakeup(sleepTimeUs);
   Serial.flush(); // Ensure all serial output is sent before sleeping
   esp_deep_sleep_start();

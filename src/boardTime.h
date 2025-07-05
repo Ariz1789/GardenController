@@ -1,3 +1,29 @@
+#include <ESP32Time.h>
+
+
+ESP32Time rtc(3600); // Initial offset. If you use configTzFile, this might become less critical for direct rtc.adjust
+
+
+bool syncTimeWithNTP();
+
+// WiFi credentials for your smartphone hotspot
+const char* WIFI_SSID = "Ariz";
+const char* WIFI_PASSWORD = "Ariz1789?";
+
+
+// NTP Server settings
+const char* NTP_SERVER_1 = "pool.ntp.org"; // Primary NTP server
+const char* NTP_SERVER_2 = "time.nist.gov"; // Secondary NTP server (optional, for redundancy)
+
+// Timezone settings for Italy (CEST currently)
+// Format: "TZ_NAME_STANDARD_TIME_OFFSET_FROM_UTC_IN_HOURS_DAYLIGHT_SAVING_TIME_RULE"
+// Example for Central European Time (CET) / Central European Summer Time (CEST):
+// "CET-1CEST,M3.5.0,M10.5.0/3"
+// CET = Central European Time (UTC+1)
+// CEST = Central European Summer Time (UTC+2)
+// M3.5.0 = Last Sunday in March (start of DST)
+// M10.5.0/3 = Last Sunday in October at 3 AM (end of DST)
+const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 // Function to connect to WiFi and synchronize time via NTP
 bool syncTimeWithNTP() {
