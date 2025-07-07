@@ -73,8 +73,9 @@ void ledInit(){
 }
 
 // Function to control the built-in LED directly (non-blocking if not delaying)
-void setBoardLEDState(uint8_t led, bool state) {
-  digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
+void setBoardLEDState(uint8_t led, bool isHIGH) {
+  Serial.println("setting led " + (String((char *)led)) + " to " + isHIGH ? "HIGH" : "LOW");
+  digitalWrite(led, isHIGH ? HIGH : LOW);
 }
 
 // FreeRTOS Task for LED control

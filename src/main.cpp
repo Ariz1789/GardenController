@@ -45,7 +45,7 @@ RTC_DATA_ATTR bool eveningActivation = false;
 void setup() {
 
   Serial.begin(9600);
-  delay(100); //wait for Serial to initialize
+  delay(1000); //wait for Serial to initialize
   Serial.println("--- Setup Start ---");
 
   ledInit();
@@ -53,13 +53,14 @@ void setup() {
   pinMode(RELAY_PIN, OUTPUT); // Set pin 8 (D8) as an output
   digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
 
+  Serial.println("waiting a little bit...");
   for (int i = 0; i < 5; i++)
   {
     greenLedMode = LED_MODE_ON;
     delay(1000);
     greenLedMode = LED_MODE_OFF;
   }
-
+  Serial.println("waiting done...");
 
   // Increment boot count every time the ESP32 starts (after reset or deep sleep wake)
   bootCount++;
@@ -122,7 +123,7 @@ void loop() {
     for (int i = 0; i < 10; i++)
     {
       activateRelay();
-      delay(500);
+      delay(2000);
     }
     redLedMode = LED_MODE_OFF;
     
@@ -179,7 +180,7 @@ void activateRelay()
   digitalWrite(RELAY_PIN, HIGH); // Activate the relay
 
   if(DEBUG){
-    delay(500);
+    delay(1000);
   }else{
     delay(ACTIVATION_MINUTES * 60 * 1000); // Stay awake for ACTIVATION_MINUTES minutes
   }
