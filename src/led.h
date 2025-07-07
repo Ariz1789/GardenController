@@ -25,15 +25,14 @@ void ledInit(){
   pinMode(LED_GREEN, OUTPUT);
   pinMode(LED_BLUE, OUTPUT);
   pinMode(LED_BUILTIN, OUTPUT);
-  pinMode(RELAY_PIN, OUTPUT); // Set pin 8 (D8) as an output
-  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
 
   // --- Create the LED control FreeRTOS task ---
+  
   xTaskCreatePinnedToCore(
     ledControlTask,   // Task function
     "MainLED Control",    // Name of task
     2048,             // Stack size (bytes) - adjust if needed
-    NULL,             // Parameter to pass to the task
+    (void*)(uintptr_t)LED_BUILTIN,             // Parameter to pass to the task
     1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
     NULL,             // Task handle (not used here)
     0                 // Core to run on (Core 0 for background tasks)
@@ -42,7 +41,7 @@ void ledInit(){
     ledControlTask,   // Task function
     "RedLED Control",    // Name of task
     2048,             // Stack size (bytes) - adjust if needed
-    NULL,             // Parameter to pass to the task
+    (void*)(uintptr_t)LEDR,             // Parameter to pass to the task
     1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
     NULL,             // Task handle (not used here)
     0                 // Core to run on (Core 0 for background tasks)
@@ -51,7 +50,7 @@ void ledInit(){
     ledControlTask,   // Task function
     "GreenLED Control",    // Name of task
     2048,             // Stack size (bytes) - adjust if needed
-    NULL,             // Parameter to pass to the task
+    (void*)(uintptr_t)LEDG,             // Parameter to pass to the task
     1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
     NULL,             // Task handle (not used here)
     0                 // Core to run on (Core 0 for background tasks)
@@ -60,7 +59,7 @@ void ledInit(){
     ledControlTask,   // Task function
     "BlueLED Control",    // Name of task
     2048,             // Stack size (bytes) - adjust if needed
-    NULL,             // Parameter to pass to the task
+    (void*)(uintptr_t)LEDB,             // Parameter to pass to the task
     1,                // Task priority (0 is lowest, configMAX_PRIORITIES-1 is highest)
     NULL,             // Task handle (not used here)
     0                 // Core to run on (Core 0 for background tasks)
@@ -68,19 +67,19 @@ void ledInit(){
   Serial.println("LED Control Task created on Core 0.");
 
   mainLedMode = LED_MODE_OFF;
-  redLedMode = LED_MODE_ON;
+  redLedMode = LED_MODE_OFF;
   greenLedMode = LED_MODE_OFF;
   bluLedMode = LED_MODE_OFF;
 }
 
 // Function to control the built-in LED directly (non-blocking if not delaying)
-void setBoardLEDState(bool state) {
+void setBoardLEDState(uint8_t led, bool state) {
   digitalWrite(LED_BUILTIN, state ? HIGH : LOW);
 }
 
 // FreeRTOS Task for LED control
 void ledControlTask(void *pvParameters) {
-  (void) pvParameters; // Cast to void to suppress unused parameter warning
+  uint8_t led = (uint8_t)(uintptr_t)pvParameters;
 
   bool ledState = LOW;
   int blinkDelayMs = 0;
@@ -89,7 +88,7 @@ void ledControlTask(void *pvParameters) {
     switch (mainLedMode) {
       case LED_MODE_OFF:
         if (ledState == HIGH) { // Only change if necessary
-          setBoardLEDState(false);
+          setBoardLEDState(led, false);
           ledState = LOW;
         }
         vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
@@ -97,7 +96,7 @@ void ledControlTask(void *pvParameters) {
 
       case LED_MODE_ON:
         if (ledState == LOW) { // Only change if necessary
-          setBoardLEDState(true);
+          setBoardLEDState(led, true);
           ledState = HIGH;
         }
         vTaskDelay(pdMS_TO_TICKS(100)); // Short delay to yield CPU
@@ -105,14 +104,14 @@ void ledControlTask(void *pvParameters) {
 
       case LED_MODE_BLINK_SLOW:
         blinkDelayMs = 1000;
-        setBoardLEDState(!ledState); // Toggle LED state
+        setBoardLEDState(led, !ledState); // Toggle LED state
         ledState = !ledState;
         vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
         break;
 
       case LED_MODE_BLINK_FAST:
         blinkDelayMs = 200;
-        setBoardLEDState(!ledState); // Toggle LED state
+        setBoardLEDState(led, !ledState); // Toggle LED state
         ledState = !ledState;
         vTaskDelay(pdMS_TO_TICKS(blinkDelayMs));
         break;

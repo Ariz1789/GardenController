@@ -25,15 +25,15 @@ void print_wakeup_reason();
 bool syncTimeWithNTP();
 void setWebServer(void *parameter);
 
+const bool DEBUG = true;
+
 const int RELAY_PIN  = 8;
-
-
 
 // Define activation times
 const int MORNING_H = 5;
 const int EVENING_H = 22;
 
-const long ACTIVATION_MINUTES = 5; // 5 minutes in seconds
+const long ACTIVATION_MINUTES = 5;
 const long SLEEP_MINUTES = 10;
 
 const int BOOT_BUTTON_PIN = 0;
@@ -49,8 +49,11 @@ void setup() {
   Serial.println("--- Setup Start ---");
 
   ledInit();
+  
+  pinMode(RELAY_PIN, OUTPUT); // Set pin 8 (D8) as an output
+  digitalWrite(RELAY_PIN, LOW); // Ensure relay is off initially
 
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 5; i++)
   {
     greenLedMode = LED_MODE_ON;
     delay(1000);
@@ -93,10 +96,10 @@ void loop() {
   mainLedMode = LED_MODE_ON; // Keep LED on while main loop is active
   greenLedMode = LED_MODE_BLINK_SLOW;
 
-  for (int i = 0; i < 10; i++)
+  for (int i = 0; i < 5; i++)
   {
     bluLedMode = LED_MODE_ON;
-    delay(1000);
+    delay(500);
     bluLedMode = LED_MODE_OFF;
   }
 
@@ -113,41 +116,60 @@ void loop() {
   bool morningActivation = false;
   bool eveningActivation = false;
 
-  // Check for 5 AM activation window
-  if (currentHour == MORNING_H && currentMinute >= 0 && currentMinute < 30 && !morningActivation )
-  {
-    morningActivation = true;
-    Serial.println("Within 5 AM activation window.");
-    activateRelay();
-  }
-  // Check for 10 PM activation window
-  else if (currentHour == EVENING_H && currentMinute >= 0 && currentMinute < 30 && !eveningActivation) 
-  {
-    eveningActivation = true;
-    Serial.println("Within 10 PM activation window.");
-    activateRelay();
-  }else if (currentHour == EVENING_H && currentMinute > 35 && morningActivation && eveningActivation) 
-  {
-    eveningActivation = false;
-    morningActivation = false;
-    Serial.println("Resetting activation flags after evening window.");
-    delay(1000); // Wait for 1 second before going to sleep
-  }else{
-    Serial.println("Waiting a minute since not in sctivation time");
-    // wait for a minute to keep board on for some times
-    delay(1 * 60 * 1000);
-    for (int i = 0; i < 6; i++)
+  if(DEBUG){
+    // always activate for short period
+    redLedMode = LED_MODE_BLINK_FAST;
+    for (int i = 0; i < 10; i++)
     {
-      if(syncTimeWithNTP()){break;}
-      delay(50);
+      activateRelay();
+      delay(500);
     }
-    Serial.println("All attempts to update time done");
+    redLedMode = LED_MODE_OFF;
+    
+  }else{
+    // Check for 5 AM activation window
+    if (currentHour == MORNING_H && currentMinute >= 0 && currentMinute < 30 && !morningActivation )
+    {
+      morningActivation = true;
+      Serial.println("Within 5 AM activation window.");
+      activateRelay();
+    }
+    // Check for 10 PM activation window
+    else if (currentHour == EVENING_H && currentMinute >= 0 && currentMinute < 30 && !eveningActivation) 
+    {
+      eveningActivation = true;
+      Serial.println("Within 10 PM activation window.");
+      activateRelay();
+    }else if (currentHour == EVENING_H && currentMinute > 35 && morningActivation && eveningActivation) 
+    {
+      eveningActivation = false;
+      morningActivation = false;
+      Serial.println("Resetting activation flags after evening window.");
+      delay(1000); // Wait for 1 second before going to sleep
+    }else{
+      Serial.println("Attempting to sync time for 5 min or less if done");
+      
+      for (int i = 0; i < 5; i++)
+      {
+        if(syncTimeWithNTP()){break;}
+        delay(60 * 1000);
+      }
+      Serial.println("All attempts to update time done");
+    }
   }
-
+  
   Serial.println("--- Loop End ---");
   
-  greenLedMode = LED_MODE_OFF;
-  goIntoSpleep(SLEEP_MINUTES);
+  if(DEBUG){
+    greenLedMode = LED_MODE_OFF;
+    digitalWrite(LED_BUILTIN, LOW);
+    goIntoSpleep(1);
+  }else{
+    greenLedMode = LED_MODE_OFF;
+    digitalWrite(LED_BUILTIN, LOW);
+    goIntoSpleep(SLEEP_MINUTES);
+  }
+  
 }
 
 void activateRelay()
@@ -156,7 +178,11 @@ void activateRelay()
   Serial.println("Activating relay for " + String(ACTIVATION_MINUTES) + " minutes.");
   digitalWrite(RELAY_PIN, HIGH); // Activate the relay
 
-  delay(ACTIVATION_MINUTES * 60 * 1000); // Stay awake for ACTIVATION_MINUTES minutes
+  if(DEBUG){
+    delay(500);
+  }else{
+    delay(ACTIVATION_MINUTES * 60 * 1000); // Stay awake for ACTIVATION_MINUTES minutes
+  }
   
   digitalWrite(RELAY_PIN, LOW); // Deactivate the relay
   Serial.println("Relay deactivated after " + String(ACTIVATION_MINUTES) + " minutes.");
