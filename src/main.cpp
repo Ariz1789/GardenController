@@ -100,9 +100,6 @@ void loop() {
   Serial.println("Current date: ");
   Serial.println(rtc.getDate());
 
-  bool morningActivation = false;
-  bool eveningActivation = false;
-
   if(DEBUG){
     // always activate for short period
     activateRelay();
@@ -126,18 +123,23 @@ void loop() {
       eveningActivation = false;
       morningActivation = false;
       Serial.println("Resetting activation flags after evening window.");
-      delay(1000); // Wait for 1 second before going to sleep
+      delay(1000);
     }else{
       Serial.println("Attempting to sync time for 5 min or less if done");
+      setBlueLed(LED_MODE_OFF);
       if(!timeSet){
         for (int i = 0; i < 5; i++)
         {
-          Serial.println("All attempts to update time done");  
+          Serial.println("Attempt # " + String(i));  
           timeSet = syncTimeWithNTP();
           if(timeSet){break;}
-          delay(60 * 1000);
+          Serial.println("Waiting 1 minute for next attempt "); 
+          setBlueLed(LED_MODE_BLINK_SLOW);
+          delay(60*1000);
         }
         Serial.println("All attempts to update time done");
+      }else{
+        Serial.println("Time already correctly set");
       }
       
     }
@@ -154,7 +156,8 @@ void loop() {
   //   digitalWrite(LED_BUILTIN, LOW);
   //   goIntoSpleep(SLEEP_MINUTES);
   // }
-  delay(60000);
+  setMainLed(LED_MODE_BLINK_SLOW);
+  delay(60*1000);
 }
 
 void activateRelay()
