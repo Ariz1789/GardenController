@@ -30,7 +30,7 @@ const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 bool syncTimeWithNTP() {
   bool retValue = false;
   Serial.println("\nConnecting to WiFi for time sync...");
-  redLedMode = LED_MODE_BLINK_FAST;
+  setBlueLed(LED_MODE_BLINK_FAST);
   WiFi.mode(WIFI_STA); // Set WiFi to Station mode
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
@@ -79,6 +79,6 @@ bool syncTimeWithNTP() {
     Serial.println("Failed to connect to WiFi hotspot.");
   }
   WiFi.mode(WIFI_OFF); // Turn off WiFi radio completely
-  redLedMode = LED_MODE_OFF;
+  setBlueLed(LED_MODE_OFF);
   return retValue;
 }

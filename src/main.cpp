@@ -16,7 +16,8 @@
 // FUNCTIONS PROTOTYPES
 void activateRelay();
 
-const bool DEBUG = true;
+const bool DEBUG = false;
+bool timeSet = false;
 
 const int RELAY_PIN  = 8;
 
@@ -34,10 +35,12 @@ RTC_DATA_ATTR bool morningActivation = false;
 RTC_DATA_ATTR bool eveningActivation = false;
 
 void setup() {
-
-  Serial.begin(9600);
+  setMainLed(LED_MODE_BLINK_FAST);
+  Serial.begin(115200);
   delay(1000); //wait for Serial to initialize
   Serial.println("--- Setup Start ---");
+  
+  timeSet = false;
 
   ledInit();
   
@@ -61,11 +64,9 @@ void setup() {
   // (RTC_DATA_ATTR variables are reset on power cycle, but not deep sleep)
   if (bootCount == 1) {
     Serial.println("Setting initial RTC time...");
-    setGreenLed(LED_MODE_BLINK_FAST);
     // Use rtc.setTime(second, minute, hour, day, month, year)
     rtc.setTime(0, 0, 0, 13, 6, 2025);
-    syncTimeWithNTP();
-    setGreenLed(LED_MODE_OFF);
+    timeSet = syncTimeWithNTP();
   }
 
   // Print wake up reason for debugging
@@ -88,18 +89,12 @@ void loop() {
   Serial.println("--- Loop Start ---");
   setMainLed(LED_MODE_BLINK_SLOW);
 
-  for (int i = 0; i < 5; i++)
-  {
-    setBlueLed(LED_MODE_ON);
-    delay(2000);
-    setBlueLed(LED_MODE_OFF);
-  }
-
   // Get current time
   int currentHour = rtc.getHour();
   int currentMinute = rtc.getMinute();
   int currentSecond = rtc.getSecond();
 
+  Serial.println("Time Set: " + String(timeSet));
   Serial.println("Current time: ");
   Serial.println(rtc.getTime());
   Serial.println("Current date: ");
@@ -110,29 +105,23 @@ void loop() {
 
   if(DEBUG){
     // always activate for short period
-    setRedLed(LED_MODE_BLINK_FAST);
-    for (int i = 0; i < 10; i++)
-    {
-      activateRelay();
-      delay(2000);
-    }
-    setRedLed(LED_MODE_OFF);
-    
+    activateRelay();
+    delay(5000);
   }else{
     // Check for 5 AM activation window
-    if (currentHour == MORNING_H && currentMinute >= 0 && currentMinute < 30 && !morningActivation )
+    if (timeSet && currentHour == MORNING_H && currentMinute >= 0 && currentMinute < 30 && !morningActivation )
     {
       morningActivation = true;
       Serial.println("Within 5 AM activation window.");
       activateRelay();
     }
     // Check for 10 PM activation window
-    else if (currentHour == EVENING_H && currentMinute >= 0 && currentMinute < 30 && !eveningActivation) 
+    else if (timeSet && currentHour == EVENING_H && currentMinute >= 0 && currentMinute < 30 && !eveningActivation) 
     {
       eveningActivation = true;
       Serial.println("Within 10 PM activation window.");
       activateRelay();
-    }else if (currentHour == EVENING_H && currentMinute > 35 && morningActivation && eveningActivation) 
+    }else if (timeSet && currentHour == EVENING_H && currentMinute > 35 && morningActivation && eveningActivation) 
     {
       eveningActivation = false;
       morningActivation = false;
@@ -140,28 +129,32 @@ void loop() {
       delay(1000); // Wait for 1 second before going to sleep
     }else{
       Serial.println("Attempting to sync time for 5 min or less if done");
-      
-      for (int i = 0; i < 5; i++)
-      {
-        if(syncTimeWithNTP()){break;}
-        delay(60 * 1000);
+      if(!timeSet){
+        for (int i = 0; i < 5; i++)
+        {
+          Serial.println("All attempts to update time done");  
+          timeSet = syncTimeWithNTP();
+          if(timeSet){break;}
+          delay(60 * 1000);
+        }
+        Serial.println("All attempts to update time done");
       }
-      Serial.println("All attempts to update time done");
+      
     }
   }
   
   Serial.println("--- Loop End ---");
   
   offAllLeds();
-  if(DEBUG){
+  // if(DEBUG){
     
-    digitalWrite(LED_BUILTIN, LOW);
-    // goIntoSpleep(1);
-  }else{
-    digitalWrite(LED_BUILTIN, LOW);
-    goIntoSpleep(SLEEP_MINUTES);
-  }
-  
+  //   digitalWrite(LED_BUILTIN, LOW);
+  //   goIntoSpleep(1L);
+  // }else{
+  //   digitalWrite(LED_BUILTIN, LOW);
+  //   goIntoSpleep(SLEEP_MINUTES);
+  // }
+  delay(60000);
 }
 
 void activateRelay()

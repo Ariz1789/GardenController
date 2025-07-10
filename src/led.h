@@ -3,11 +3,6 @@
 void setBoardLEDState(uint8_t led, bool isOn);
 // FreeRTOS Task for LED control
 void ledControlTask(void *pvParameters);
-// Individual LED control functions
-void setMainLed(LedMode mode);
-void setRedLed(LedMode mode);
-void setGreenLed(LedMode mode);
-void setBlueLed(LedMode mode);
 
 void offAllLeds();
 
@@ -19,12 +14,12 @@ enum LedMode {
   LED_MODE_BLINK_FAST  // E.g., 200ms on, 200ms off
 };
 
-enum Leds {
-  "main",
-  "red",
-  "green",
-  "blue"
-};
+// Individual LED control functions
+void setMainLed(LedMode mode);
+void setRedLed(LedMode mode);
+void setGreenLed(LedMode mode);
+void setBlueLed(LedMode mode);
+
 
 // Struct for LED control (removed const members and volatile)
 struct LedStruct {
@@ -115,30 +110,30 @@ void offAllLeds(){
   blueLed.ledMode = LED_MODE_OFF;
 }
 // Individual LED control functions
-public void setMainLed(LedMode mode) {
+void setMainLed(LedMode mode) {
     mainLed.ledMode = mode;
 }
 
-public void setRedLed(LedMode mode) {
+void setRedLed(LedMode mode) {
     redLed.ledMode = mode;
 }
 
-public void setGreenLed(LedMode mode) {
+void setGreenLed(LedMode mode) {
     greenLed.ledMode = mode;
 }
 
-public void setBlueLed(LedMode mode) {
+void setBlueLed(LedMode mode) {
     blueLed.ledMode = mode;
 }
 
 
 // Function to control the built-in LED directly
-private void setBoardLEDState(uint8_t led, bool isOn) {
+void setBoardLEDState(uint8_t led, bool isOn) {
   // Serial.println("Setting LED pin " + String(led) + " to " + (isOn ? "ON (LOW)" : "OFF (HIGH)"));
   digitalWrite(led, isOn ? LOW : HIGH); // Note: ESP32 LEDs are active LOW
 }
 
-private void ledControlTask(void *pvParameters) {
+void ledControlTask(void *pvParameters) {
   // Cast the parameter back to our struct pointer
   LedStruct* ledStr = (LedStruct*)pvParameters;
   
