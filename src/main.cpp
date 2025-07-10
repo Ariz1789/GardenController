@@ -14,16 +14,7 @@
 #include "boardSleep.h"  // For sleep and wake functions
 
 // FUNCTIONS PROTOTYPES
-
-// Function to control the built-in LED directly (non-blocking if not delaying)
-void setBoardLEDState(bool state);
-// FreeRTOS Task for LED control
-void ledControlTask(void *pvParameters);
-void goIntoSpleep(long sleepMin);
 void activateRelay();
-void print_wakeup_reason();
-bool syncTimeWithNTP();
-void setWebServer(void *parameter);
 
 const bool DEBUG = true;
 
@@ -56,9 +47,9 @@ void setup() {
   Serial.println("waiting a little bit...");
   for (int i = 0; i < 5; i++)
   {
-    greenLedMode = LED_MODE_ON;
+    setGreenLed(LED_MODE_ON);
     delay(1000);
-    greenLedMode = LED_MODE_OFF;
+    setGreenLed(LED_MODE_OFF);
   }
   Serial.println("waiting done...");
 
@@ -70,9 +61,11 @@ void setup() {
   // (RTC_DATA_ATTR variables are reset on power cycle, but not deep sleep)
   if (bootCount == 1) {
     Serial.println("Setting initial RTC time...");
+    setGreenLed(LED_MODE_BLINK_FAST);
     // Use rtc.setTime(second, minute, hour, day, month, year)
     rtc.setTime(0, 0, 0, 13, 6, 2025);
     syncTimeWithNTP();
+    setGreenLed(LED_MODE_OFF);
   }
 
   // Print wake up reason for debugging
@@ -87,21 +80,19 @@ void setup() {
   // This means pressing the button will wake the ESP32.
   esp_sleep_enable_ext0_wakeup(GPIO_NUM_0, 0);
   Serial.println("Button wakeup enabled on GPIO0 (BOOT button).");
-  redLedMode = LED_MODE_OFF;
+  offAllLeds();
   Serial.println("--- Setup End ---");
 }
 
 void loop() {
   Serial.println("--- Loop Start ---");
-  
-  mainLedMode = LED_MODE_ON; // Keep LED on while main loop is active
-  greenLedMode = LED_MODE_BLINK_SLOW;
+  setMainLed(LED_MODE_BLINK_SLOW);
 
   for (int i = 0; i < 5; i++)
   {
-    bluLedMode = LED_MODE_ON;
-    delay(500);
-    bluLedMode = LED_MODE_OFF;
+    setBlueLed(LED_MODE_ON);
+    delay(2000);
+    setBlueLed(LED_MODE_OFF);
   }
 
   // Get current time
@@ -119,13 +110,13 @@ void loop() {
 
   if(DEBUG){
     // always activate for short period
-    redLedMode = LED_MODE_BLINK_FAST;
+    setRedLed(LED_MODE_BLINK_FAST);
     for (int i = 0; i < 10; i++)
     {
       activateRelay();
       delay(2000);
     }
-    redLedMode = LED_MODE_OFF;
+    setRedLed(LED_MODE_OFF);
     
   }else{
     // Check for 5 AM activation window
@@ -161,12 +152,12 @@ void loop() {
   
   Serial.println("--- Loop End ---");
   
+  offAllLeds();
   if(DEBUG){
-    greenLedMode = LED_MODE_OFF;
+    
     digitalWrite(LED_BUILTIN, LOW);
-    goIntoSpleep(1);
+    // goIntoSpleep(1);
   }else{
-    greenLedMode = LED_MODE_OFF;
     digitalWrite(LED_BUILTIN, LOW);
     goIntoSpleep(SLEEP_MINUTES);
   }
@@ -175,17 +166,17 @@ void loop() {
 
 void activateRelay()
 { 
-  bluLedMode = LED_MODE_BLINK_FAST;
+  setRedLed(LED_MODE_ON);
   Serial.println("Activating relay for " + String(ACTIVATION_MINUTES) + " minutes.");
   digitalWrite(RELAY_PIN, HIGH); // Activate the relay
 
   if(DEBUG){
-    delay(1000);
+    delay(2000);
   }else{
     delay(ACTIVATION_MINUTES * 60 * 1000); // Stay awake for ACTIVATION_MINUTES minutes
   }
   
   digitalWrite(RELAY_PIN, LOW); // Deactivate the relay
   Serial.println("Relay deactivated after " + String(ACTIVATION_MINUTES) + " minutes.");
-  bluLedMode = LED_MODE_OFF;
+  setRedLed(LED_MODE_OFF);
 }

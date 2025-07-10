@@ -1,10 +1,11 @@
 #include <ESP32Time.h>
+// FUNCTIONS PROTOTYPES
+bool syncTimeWithNTP();
+
 
 
 ESP32Time rtc(3600); // Initial offset. If you use configTzFile, this might become less critical for direct rtc.adjust
 
-
-bool syncTimeWithNTP();
 
 // WiFi credentials for your smartphone hotspot
 const char* WIFI_SSID = "Ariz";

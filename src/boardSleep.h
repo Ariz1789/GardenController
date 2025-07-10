@@ -1,3 +1,7 @@
+// FUNCTIONS PROTOTYPES
+void goIntoSpleep(long sleepMin);
+void print_wakeup_reason();
+
 
 void goIntoSpleep(long sleepMin)
 {
